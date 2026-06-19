@@ -187,6 +187,7 @@ def get_match_sentiment(match_id: int, db: Session = Depends(get_db)):
                 score=t.score,
                 sample_size=t.sample_size,
                 sources=[s for s in t.sources.split(",") if s],
+                summary=t.summary,
             )
             for t in team_rows
         ],
@@ -197,6 +198,7 @@ def get_match_sentiment(match_id: int, db: Session = Depends(get_db)):
                 score=ps.score,
                 sample_size=ps.sample_size,
                 sources=[s for s in ps.sources.split(",") if s],
+                summary=ps.summary,
             )
             for ps, p in player_rows
         ],

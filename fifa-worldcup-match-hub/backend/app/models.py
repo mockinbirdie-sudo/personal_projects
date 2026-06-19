@@ -145,6 +145,7 @@ class TeamSentiment(Base):
     score: Mapped[float] = mapped_column(Float, nullable=False)  # 1-10
     sample_size: Mapped[int] = mapped_column(Integer, default=0)
     sources: Mapped[str] = mapped_column(String, default="")  # e.g. "youtube,news"
+    summary: Mapped[str] = mapped_column(String, default="")  # ~60-word extractive summary
 
     __table_args__ = (UniqueConstraint("match_id", "team_id", name="uq_team_sentiment"),)
 
@@ -160,5 +161,6 @@ class PlayerSentiment(Base):
     score: Mapped[float] = mapped_column(Float, nullable=False)  # 1-10
     sample_size: Mapped[int] = mapped_column(Integer, default=0)
     sources: Mapped[str] = mapped_column(String, default="")
+    summary: Mapped[str] = mapped_column(String, default="")  # ~60-word extractive summary
 
     __table_args__ = (UniqueConstraint("match_id", "player_id", name="uq_player_sentiment"),)

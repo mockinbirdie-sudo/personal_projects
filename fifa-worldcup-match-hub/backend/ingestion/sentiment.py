@@ -83,6 +83,55 @@ def score_texts(texts: list[str]) -> tuple[float, int]:
     return score, len(texts)
 
 
+_WHITESPACE_RE = re.compile(r"\s+")
+_URL_RE = re.compile(r"https?://\S+")
+
+
+def _clean_snippet(text: str, max_words: int = 16) -> str:
+    text = _URL_RE.sub("", text)
+    text = _WHITESPACE_RE.sub(" ", text).strip()
+    words = text.split(" ")
+    if len(words) > max_words:
+        text = " ".join(words[:max_words]) + "…"
+    return text
+
+
+def build_summary(texts: list[str], score: float, max_words: int = 60) -> str:
+    """Free, extractive ~60-word summary: stitches the most representative positive and
+    negative snippets from the same texts already scored, rather than generating new prose
+    (no LLM call, no added cost). Falls back to a generic line when there's no usable text.
+    """
+    if not texts:
+        return "Not enough public reaction yet to summarize."
+
+    scored = sorted(
+        ((t, _analyzer.polarity_scores(t)["compound"]) for t in texts),
+        key=lambda pair: pair[1],
+    )
+    most_negative = scored[0]
+    most_positive = scored[-1]
+
+    if score >= 7:
+        lead = "Public reaction is largely positive"
+    elif score >= 4:
+        lead = "Public reaction is mixed"
+    else:
+        lead = "Public reaction leans critical"
+
+    parts = [lead]
+    if most_positive[1] > 0.15:
+        parts.append(f'with comments like "{_clean_snippet(most_positive[0])}"')
+    if most_negative[1] < -0.15 and most_negative[0] != most_positive[0]:
+        connector = "but some pushback such as" if most_positive[1] > 0.15 else "with reactions like"
+        parts.append(f'{connector} "{_clean_snippet(most_negative[0])}"')
+
+    summary = (", ".join(parts) if len(parts) > 1 else parts[0]) + "."
+    words = summary.split(" ")
+    if len(words) > max_words:
+        summary = " ".join(words[:max_words]) + "…"
+    return summary
+
+
 def _gather_texts(subject_query: str, video_url: str | None) -> tuple[list[str], list[str]]:
     """Returns (texts, sources_used)."""
     texts: list[str] = []
@@ -120,6 +169,7 @@ def compute_match_sentiment(db, match: Match) -> None:
                 TeamSentiment(
                     match_id=match.id, team_id=team_id, score=score,
                     sample_size=sample_size, sources=",".join(sources),
+                    summary=build_summary(texts, score),
                 )
             )
         except Exception:
@@ -137,6 +187,7 @@ def compute_match_sentiment(db, match: Match) -> None:
                 PlayerSentiment(
                     match_id=match.id, player_id=player_id, score=score,
                     sample_size=sample_size, sources=",".join(sources),
+                    summary=build_summary(texts, score),
                 )
             )
         except Exception:

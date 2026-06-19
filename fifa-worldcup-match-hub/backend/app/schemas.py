@@ -110,6 +110,7 @@ class TeamSentimentOut(BaseModel):
     score: float
     sample_size: int
     sources: list[str]
+    summary: str
 
 
 class PlayerSentimentOut(BaseModel):
@@ -118,6 +119,7 @@ class PlayerSentimentOut(BaseModel):
     score: float
     sample_size: int
     sources: list[str]
+    summary: str
 
 
 class MatchSentimentOut(BaseModel):
