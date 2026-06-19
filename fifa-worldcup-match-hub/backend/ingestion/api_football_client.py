@@ -16,6 +16,14 @@ _MIN_SECONDS_BETWEEN_REQUESTS = 6.5
 _RATE_LIMIT_RETRY_SECONDS = 65
 
 
+class ApiFootballError(Exception):
+    """Raised when API-Football returns a non-empty `errors` payload (suspension, quota, etc.).
+
+    Treated as a hard failure rather than "no data" so callers don't mistake an account/plan
+    problem for a legitimately empty result and overwrite previously-ingested rows with nothing.
+    """
+
+
 class ApiFootballClient:
     def __init__(self, api_key: str | None = None, host: str | None = None) -> None:
         self.api_key = api_key or settings.api_football_key
@@ -40,7 +48,11 @@ class ApiFootballClient:
                 time.sleep(_RATE_LIMIT_RETRY_SECONDS)
                 return self._get(path, params, _retried=True)
             resp.raise_for_status()
-            return resp.json()
+            data = resp.json()
+            errors = data.get("errors")
+            if errors:
+                raise ApiFootballError(f"{path} {params}: {errors}")
+            return data
 
     def get_fixtures(self, league_id: int, season: int, date: str | None = None) -> list[dict]:
         """Fixtures for a league/season, optionally filtered to a single date (YYYY-MM-DD).
