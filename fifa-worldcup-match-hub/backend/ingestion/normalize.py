@@ -313,6 +313,23 @@ def upsert_match_sportsdb(db: Session, event_json: dict) -> Match:
     return match
 
 
+def _ensure_player_and_stat(db: Session, player_id: int, name: str, team_id: int, match_id: int) -> None:
+    """TheSportsDB's free-tier lineup is capped at 5 players, but timeline events can reference
+    any player in the match. Postgres enforces the player_id FK on MatchEvent/PlayerMatchStat, so
+    any event participant missing from that 5-person sample must be backfilled here as a minimal
+    stub — otherwise the FK violation rolls back the entire match's detail ingestion.
+    """
+    # autoflush is off on this session, so a just-added object isn't visible to db.get()/queries
+    # until flushed — flush immediately after each insert or a player referenced twice in the
+    # same ingestion pass (e.g. once in the lineup, once in the timeline) gets inserted twice.
+    if db.get(Player, player_id) is None:
+        db.add(Player(id=player_id, name=name, team_id=team_id, position="", photo_url=""))
+        db.flush()
+    if db.query(PlayerMatchStat).filter_by(player_id=player_id, match_id=match_id).one_or_none() is None:
+        db.add(PlayerMatchStat(player_id=player_id, match_id=match_id, team_id=team_id))
+        db.flush()
+
+
 def upsert_events_sportsdb(db: Session, match: Match, timeline_json: list[dict]) -> None:
     db.query(MatchEvent).filter(MatchEvent.match_id == match.id).delete()
     goal_counts: dict[int, int] = {}
@@ -326,6 +343,12 @@ def upsert_events_sportsdb(db: Session, match: Match, timeline_json: list[dict])
         team_id = _int_or_none(ev.get("idTeam"))
         ev_type = ev["strTimeline"]
         detail = ev.get("strTimelineDetail") or ""
+
+        if player_id and team_id:
+            _ensure_player_and_stat(db, player_id, ev.get("strPlayer") or "", team_id, match.id)
+        if assist_id and team_id:
+            # Assists are credited to a teammate of the scorer, so the same team_id applies.
+            _ensure_player_and_stat(db, assist_id, ev.get("strAssist") or "", team_id, match.id)
 
         db.add(
             MatchEvent(
@@ -354,7 +377,7 @@ def upsert_events_sportsdb(db: Session, match: Match, timeline_json: list[dict])
     for player_id in set(goal_counts) | set(assist_counts) | set(yellow_counts) | set(red_counts):
         pms = db.query(PlayerMatchStat).filter_by(player_id=player_id, match_id=match.id).one_or_none()
         if pms is None:
-            continue  # player not in the ingested lineup; skip rather than guess their team
+            continue  # shouldn't happen now that participants are backfilled above, but stay safe
         pms.goals = goal_counts.get(player_id, pms.goals)
         pms.assists = assist_counts.get(player_id, pms.assists)
         pms.yellow_cards = yellow_counts.get(player_id, pms.yellow_cards)
@@ -400,6 +423,8 @@ def upsert_lineup_sportsdb(db: Session, match: Match, lineup_json: list[dict]) -
             player.photo_url = entry.get("strCutout") or entry.get("strThumb") or player.photo_url
 
         db.add(PlayerMatchStat(player_id=player_id, match_id=match.id, team_id=team_id))
+
+    db.flush()  # make lineup inserts visible to upsert_events_sportsdb's db.get() checks
 
 
 def enhance_with_api_football(db: Session, match: Match, af_client) -> None:
