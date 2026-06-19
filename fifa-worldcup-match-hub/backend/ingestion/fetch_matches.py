@@ -52,8 +52,15 @@ def run_ingestion() -> int:
             events.extend(sportsdb.get_events_for_date(date))
 
         for event_json in events:
-            match = upsert_match_sportsdb(db, event_json)
-            db.commit()
+            try:
+                match = upsert_match_sportsdb(db, event_json)
+                db.commit()
+            except Exception:
+                db.rollback()
+                logger.warning(
+                    "Skipping fixture %s — basic upsert failed", event_json.get("idEvent"), exc_info=True
+                )
+                continue
 
             if match.status not in ("NS", "TBD", ""):
                 try:
