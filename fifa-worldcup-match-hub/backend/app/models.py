@@ -131,3 +131,34 @@ class PlayerTournamentStat(Base):
     yellow_cards: Mapped[int] = mapped_column(Integer, default=0)
     red_cards: Mapped[int] = mapped_column(Integer, default=0)
     rating_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class TeamSentiment(Base):
+    """Public sentiment (1=poor, 10=great) for a team in a specific match, derived from
+    YouTube comments on the match highlight video and/or Google News headlines."""
+
+    __tablename__ = "team_sentiment"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"))
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
+    score: Mapped[float] = mapped_column(Float, nullable=False)  # 1-10
+    sample_size: Mapped[int] = mapped_column(Integer, default=0)
+    sources: Mapped[str] = mapped_column(String, default="")  # e.g. "youtube,news"
+
+    __table_args__ = (UniqueConstraint("match_id", "team_id", name="uq_team_sentiment"),)
+
+
+class PlayerSentiment(Base):
+    """Public sentiment (1=poor, 10=great) for a player in a specific match."""
+
+    __tablename__ = "player_sentiment"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"))
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    score: Mapped[float] = mapped_column(Float, nullable=False)  # 1-10
+    sample_size: Mapped[int] = mapped_column(Integer, default=0)
+    sources: Mapped[str] = mapped_column(String, default="")
+
+    __table_args__ = (UniqueConstraint("match_id", "player_id", name="uq_player_sentiment"),)

@@ -103,3 +103,23 @@ class PlayerTournamentStatOut(BaseModel):
     yellow_cards: int
     red_cards: int
     rating_avg: float | None
+
+
+class TeamSentimentOut(BaseModel):
+    team_id: int
+    score: float
+    sample_size: int
+    sources: list[str]
+
+
+class PlayerSentimentOut(BaseModel):
+    player_id: int
+    player_name: str
+    score: float
+    sample_size: int
+    sources: list[str]
+
+
+class MatchSentimentOut(BaseModel):
+    teams: list[TeamSentimentOut]
+    players: list[PlayerSentimentOut]

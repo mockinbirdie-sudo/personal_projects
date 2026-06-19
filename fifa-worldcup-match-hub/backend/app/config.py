@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     api_football_key: str = ""
     api_football_host: str = "v3.football.api-sports.io"
 
+    # Optional: enables pulling comments from the match's highlight video for sentiment scoring.
+    # Without it, sentiment falls back to Google News RSS headlines only (no key needed there).
+    youtube_api_key: str = ""
+
     database_url: str = "sqlite:///./worldcup.db"
     admin_reset_token: str = ""
     wc_league_id: int = 1

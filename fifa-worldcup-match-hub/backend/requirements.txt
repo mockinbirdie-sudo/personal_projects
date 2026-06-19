@@ -8,3 +8,5 @@ apscheduler==3.10.4
 python-dotenv==1.0.1
 psycopg[binary]==3.2.3
 pytest==8.3.3
+vaderSentiment==3.3.2
+feedparser==6.0.11

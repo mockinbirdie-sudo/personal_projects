@@ -24,6 +24,7 @@ from ingestion.normalize import (
     upsert_match_sportsdb,
     upsert_match_stats_sportsdb,
 )
+from ingestion.sentiment import compute_match_sentiment
 from ingestion.sportsdb_client import TheSportsDbClient
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,13 @@ def run_ingestion() -> int:
                             match.id,
                             exc_info=True,
                         )
+
+                try:
+                    compute_match_sentiment(db, match)
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                    logger.warning("Sentiment computation failed for match %s", match.id, exc_info=True)
 
             processed += 1
 

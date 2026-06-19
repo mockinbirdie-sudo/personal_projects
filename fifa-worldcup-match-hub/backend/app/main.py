@@ -6,15 +6,27 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db, init_db
-from app.models import Match, MatchEvent, MatchStat, Player, PlayerMatchStat, PlayerTournamentStat
+from app.models import (
+    Match,
+    MatchEvent,
+    MatchStat,
+    Player,
+    PlayerMatchStat,
+    PlayerSentiment,
+    PlayerTournamentStat,
+    TeamSentiment,
+)
 from app.schemas import (
     EventOut,
+    MatchSentimentOut,
     MatchStatOut,
     MatchSummaryOut,
     MatchTimelineOut,
     PlayerMatchStatOut,
+    PlayerSentimentOut,
     PlayerTournamentStatOut,
     TeamOut,
+    TeamSentimentOut,
 )
 
 app = FastAPI(title="World Cup Match Hub API")
@@ -152,6 +164,42 @@ def get_player_tournament_stats(player_id: int, db: Session = Depends(get_db)):
         yellow_cards=stats.yellow_cards,
         red_cards=stats.red_cards,
         rating_avg=stats.rating_avg,
+    )
+
+
+@app.get("/matches/{match_id}/sentiment", response_model=MatchSentimentOut)
+def get_match_sentiment(match_id: int, db: Session = Depends(get_db)):
+    match = db.get(Match, match_id)
+    if match is None:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    team_rows = db.query(TeamSentiment).filter(TeamSentiment.match_id == match_id).all()
+    player_rows = (
+        db.query(PlayerSentiment, Player)
+        .join(Player, Player.id == PlayerSentiment.player_id)
+        .filter(PlayerSentiment.match_id == match_id)
+        .all()
+    )
+    return MatchSentimentOut(
+        teams=[
+            TeamSentimentOut(
+                team_id=t.team_id,
+                score=t.score,
+                sample_size=t.sample_size,
+                sources=[s for s in t.sources.split(",") if s],
+            )
+            for t in team_rows
+        ],
+        players=[
+            PlayerSentimentOut(
+                player_id=ps.player_id,
+                player_name=p.name,
+                score=ps.score,
+                sample_size=ps.sample_size,
+                sources=[s for s in ps.sources.split(",") if s],
+            )
+            for ps, p in player_rows
+        ],
     )
 
 
