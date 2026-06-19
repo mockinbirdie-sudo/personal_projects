@@ -49,7 +49,10 @@ def run_ingestion() -> int:
     try:
         events: list[dict] = []
         for date in _dates_in_last_24h():
-            events.extend(sportsdb.get_events_for_date(date))
+            try:
+                events.extend(sportsdb.get_events_for_date(date))
+            except Exception:
+                logger.warning("Failed to fetch fixtures for %s — skipping this date", date, exc_info=True)
 
         for event_json in events:
             try:

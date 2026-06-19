@@ -11,10 +11,11 @@ import httpx
 
 from app.config import settings
 
-# TheSportsDB's free key is a shared public key used by many consumers; space requests out
-# to avoid tripping a burst rate limit, and retry once with backoff on 429/5xx.
+# TheSportsDB's free key is a shared public key used by many consumers — it gets rate-limited
+# by *other* users' traffic too, not just ours. Space requests out, and retry several times
+# with growing backoff rather than giving up after one short wait.
 _MIN_SECONDS_BETWEEN_REQUESTS = 1.5
-_RETRY_BACKOFF_SECONDS = 10
+_RETRY_BACKOFF_SECONDS = (10, 30, 60)
 
 
 class TheSportsDbClient:
@@ -29,14 +30,14 @@ class TheSportsDbClient:
         if elapsed < _MIN_SECONDS_BETWEEN_REQUESTS:
             time.sleep(_MIN_SECONDS_BETWEEN_REQUESTS - elapsed)
 
-    def _get(self, path: str, params: dict, _retried: bool = False) -> dict:
+    def _get(self, path: str, params: dict, _attempt: int = 0) -> dict:
         self._throttle()
         with httpx.Client(timeout=20) as client:
             resp = client.get(f"{self.base_url}{path}", params=params)
             self._last_request_at = time.monotonic()
-            if resp.status_code in (429, 502, 503) and not _retried:
-                time.sleep(_RETRY_BACKOFF_SECONDS)
-                return self._get(path, params, _retried=True)
+            if resp.status_code in (429, 502, 503) and _attempt < len(_RETRY_BACKOFF_SECONDS):
+                time.sleep(_RETRY_BACKOFF_SECONDS[_attempt])
+                return self._get(path, params, _attempt=_attempt + 1)
             resp.raise_for_status()
             return resp.json()
 
