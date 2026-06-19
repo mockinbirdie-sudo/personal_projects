@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     api_football_host: str = "v3.football.api-sports.io"
 
     database_url: str = "sqlite:///./worldcup.db"
+    admin_reset_token: str = ""
     wc_league_id: int = 1
     wc_season: int = 2026
     cors_origins: str = "http://localhost:5173,http://localhost:3000"

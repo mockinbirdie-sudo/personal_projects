@@ -157,3 +157,18 @@ def get_player_tournament_stats(player_id: int, db: Session = Depends(get_db)):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/admin/reset-db")
+def reset_db(token: str):
+    """One-time schema reset for picking up model changes (e.g. new columns) that
+    create_all() can't apply to existing tables. Requires ADMIN_RESET_TOKEN to be set
+    and matched; disabled (404) when the token env var is empty.
+    """
+    if not settings.admin_reset_token or token != settings.admin_reset_token:
+        raise HTTPException(status_code=404)
+    from app.db import Base, engine
+
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    return {"status": "reset"}
