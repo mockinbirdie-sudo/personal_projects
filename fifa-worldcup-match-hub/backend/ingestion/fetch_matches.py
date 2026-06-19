@@ -1,8 +1,10 @@
-"""Scheduled ingestion job: pulls World Cup fixtures (defaulting to the last 24h window)
-plus their events/stats/player-stats, and upserts everything into the DB.
+"""Scheduled ingestion job: TheSportsDB is the primary source for fixtures, timelines, basic
+stats, and images. If an API-Football key is configured and working, it's used as an optional
+enhancement layer for richer per-match/per-player stats — its failure (suspension, rate limit,
+no key) never blocks or wipes the TheSportsDB data already ingested.
 
 Run manually:    python -m ingestion.fetch_matches
-Run on a timer:  see schedule() below (APScheduler), invoked from app.main on startup.
+Run on a timer:  see start_scheduler() below, called from app.main on FastAPI startup.
 """
 from __future__ import annotations
 
@@ -15,12 +17,14 @@ from app.config import settings
 from app.db import SessionLocal, init_db
 from ingestion.api_football_client import ApiFootballClient
 from ingestion.normalize import (
+    enhance_with_api_football,
     recompute_tournament_stats,
-    upsert_events,
-    upsert_fixture,
-    upsert_match_stats,
-    upsert_player_match_stats,
+    upsert_events_sportsdb,
+    upsert_lineup_sportsdb,
+    upsert_match_sportsdb,
+    upsert_match_stats_sportsdb,
 )
+from ingestion.sportsdb_client import TheSportsDbClient
 
 logger = logging.getLogger(__name__)
 
@@ -32,42 +36,49 @@ def _dates_in_last_24h() -> list[str]:
     return sorted(dates)
 
 
-def run_ingestion(league_id: int | None = None, season: int | None = None) -> int:
-    """Fetches fixtures for the configured league/season within the last 24h and stores them.
-
-    Returns the number of fixtures processed.
+def run_ingestion() -> int:
+    """Ingests World Cup fixtures within the last 24h from TheSportsDB, then optionally
+    enhances with API-Football stats. Returns the number of fixtures processed.
     """
-    league_id = league_id or settings.wc_league_id
-    season = season or settings.wc_season
-    client = ApiFootballClient()
+    sportsdb = TheSportsDbClient()
+    af_client = ApiFootballClient() if settings.api_football_key else None
+
     db = SessionLocal()
     processed = 0
     try:
-        fixtures: list[dict] = []
+        events: list[dict] = []
         for date in _dates_in_last_24h():
-            fixtures.extend(client.get_fixtures(league_id, season, date=date))
+            events.extend(sportsdb.get_events_for_date(date))
 
-        for fixture_json in fixtures:
-            fixture_id = fixture_json["fixture"]["id"]
-            upsert_fixture(db, fixture_json)
+        for event_json in events:
+            match = upsert_match_sportsdb(db, event_json)
             db.commit()
 
-            if fixture_json["fixture"]["status"]["short"] not in ("NS", "TBD"):
+            if match.status not in ("NS", "TBD", ""):
                 try:
-                    events = client.get_fixture_events(fixture_id)
-                    upsert_events(db, fixture_id, events)
+                    timeline = sportsdb.get_timeline(match.id)
+                    stats = sportsdb.get_event_stats(match.id)
+                    lineup = sportsdb.get_lineup(match.id)
 
-                    stats = client.get_fixture_statistics(fixture_id)
-                    if stats:
-                        upsert_match_stats(db, fixture_id, stats)
-
-                    player_stats = client.get_fixture_player_stats(fixture_id)
-                    if player_stats:
-                        upsert_player_match_stats(db, fixture_id, player_stats)
+                    upsert_lineup_sportsdb(db, match, lineup)
+                    upsert_events_sportsdb(db, match, timeline)
+                    upsert_match_stats_sportsdb(db, match, stats)
                     db.commit()
                 except Exception:
                     db.rollback()
-                    logger.warning("Skipping detail ingestion for fixture %s after error", fixture_id, exc_info=True)
+                    logger.warning("Skipping TheSportsDB detail ingestion for match %s", match.id, exc_info=True)
+
+                if af_client is not None:
+                    try:
+                        enhance_with_api_football(db, match, af_client)
+                        db.commit()
+                    except Exception:
+                        db.rollback()
+                        logger.warning(
+                            "API-Football enhancement unavailable for match %s — continuing without it",
+                            match.id,
+                            exc_info=True,
+                        )
 
             processed += 1
 

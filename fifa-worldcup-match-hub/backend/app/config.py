@@ -4,11 +4,21 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # TheSportsDB is the primary data source: fixtures, timeline, basic match stats, and all
+    # images. "3" is TheSportsDB's public free test key (generous limits, no signup required).
+    sportsdb_key: str = "3"
+    sportsdb_host: str = "www.thesportsdb.com"
+    sportsdb_league_id: int = 4429  # FIFA World Cup
+
+    # API-Football is an optional enhancement layer: when its key is set and working, it adds
+    # richer per-match/per-player stats (passes, tackles, ratings) on top of the TheSportsDB
+    # data. The app fully functions without it.
     api_football_key: str = ""
     api_football_host: str = "v3.football.api-sports.io"
+
     database_url: str = "sqlite:///./worldcup.db"
     wc_league_id: int = 1
-    wc_season: int = 2022
+    wc_season: int = 2026
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
     @property

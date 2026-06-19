@@ -30,10 +30,9 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
-    if settings.api_football_key:
-        from ingestion.fetch_matches import start_scheduler
+    from ingestion.fetch_matches import start_scheduler
 
-        start_scheduler()
+    start_scheduler()
 
 
 def _key_events_for(match: Match) -> list[str]:

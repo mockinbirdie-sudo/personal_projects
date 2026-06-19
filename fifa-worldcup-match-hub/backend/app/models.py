@@ -9,7 +9,7 @@ from app.db import Base
 class Team(Base):
     __tablename__ = "teams"
 
-    id: Mapped[int] = mapped_column(primary_key=True)  # API-Football team id
+    id: Mapped[int] = mapped_column(primary_key=True)  # TheSportsDB idTeam
     name: Mapped[str] = mapped_column(String, nullable=False)
     logo_url: Mapped[str] = mapped_column(String, default="")
 
@@ -17,7 +17,8 @@ class Team(Base):
 class Match(Base):
     __tablename__ = "matches"
 
-    id: Mapped[int] = mapped_column(primary_key=True)  # API-Football fixture id
+    id: Mapped[int] = mapped_column(primary_key=True)  # TheSportsDB idEvent
+    api_football_id: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True)
     home_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
     away_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
     kickoff_utc: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -79,7 +80,7 @@ class MatchStat(Base):
 class Player(Base):
     __tablename__ = "players"
 
-    id: Mapped[int] = mapped_column(primary_key=True)  # API-Football player id
+    id: Mapped[int] = mapped_column(primary_key=True)  # TheSportsDB idPlayer
     name: Mapped[str] = mapped_column(String, nullable=False)
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
     position: Mapped[str] = mapped_column(String, default="")
