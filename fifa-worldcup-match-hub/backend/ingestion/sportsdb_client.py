@@ -5,9 +5,16 @@ Docs: https://www.thesportsdb.com/free_api
 """
 from __future__ import annotations
 
+import time
+
 import httpx
 
 from app.config import settings
+
+# TheSportsDB's free key is a shared public key used by many consumers; space requests out
+# to avoid tripping a burst rate limit, and retry once with backoff on 429/5xx.
+_MIN_SECONDS_BETWEEN_REQUESTS = 1.5
+_RETRY_BACKOFF_SECONDS = 10
 
 
 class TheSportsDbClient:
@@ -15,10 +22,21 @@ class TheSportsDbClient:
         self.api_key = api_key or settings.sportsdb_key
         self.host = host or settings.sportsdb_host
         self.base_url = f"https://{self.host}/api/v1/json/{self.api_key}"
+        self._last_request_at: float = 0.0
 
-    def _get(self, path: str, params: dict) -> dict:
+    def _throttle(self) -> None:
+        elapsed = time.monotonic() - self._last_request_at
+        if elapsed < _MIN_SECONDS_BETWEEN_REQUESTS:
+            time.sleep(_MIN_SECONDS_BETWEEN_REQUESTS - elapsed)
+
+    def _get(self, path: str, params: dict, _retried: bool = False) -> dict:
+        self._throttle()
         with httpx.Client(timeout=20) as client:
             resp = client.get(f"{self.base_url}{path}", params=params)
+            self._last_request_at = time.monotonic()
+            if resp.status_code in (429, 502, 503) and not _retried:
+                time.sleep(_RETRY_BACKOFF_SECONDS)
+                return self._get(path, params, _retried=True)
             resp.raise_for_status()
             return resp.json()
 
