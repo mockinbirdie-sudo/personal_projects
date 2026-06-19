@@ -58,6 +58,7 @@ def _to_match_summary(match: Match) -> MatchSummaryOut:
         venue=match.venue,
         stage=match.stage,
         highlight_images=images,
+        highlight_video_url=match.highlight_video_url,
         key_events=_key_events_for(match),
     )
 

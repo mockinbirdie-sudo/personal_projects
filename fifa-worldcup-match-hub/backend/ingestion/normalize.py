@@ -273,9 +273,16 @@ def upsert_match_sportsdb(db: Session, event_json: dict) -> Match:
     kickoff = datetime.fromisoformat(event_json["strTimestamp"])
     images = [
         u
-        for u in (event_json.get("strPoster"), event_json.get("strThumb"), event_json.get("strBanner"))
+        for u in (
+            event_json.get("strPoster"),
+            event_json.get("strThumb"),
+            event_json.get("strBanner"),
+            event_json.get("strFanart"),
+            event_json.get("strSquare"),
+        )
         if u
     ] or [home_team.logo_url, away_team.logo_url]
+    video_url = event_json.get("strVideo") or None
 
     af_id = _int_or_none(event_json.get("idAPIfootball"))
 
@@ -293,6 +300,7 @@ def upsert_match_sportsdb(db: Session, event_json: dict) -> Match:
             venue=event_json.get("strVenue") or "",
             stage=(f"Group {event_json['strGroup']}" if event_json.get("strGroup") else f"Round {event_json.get('intRound', '')}").strip(),
             highlight_image_urls=",".join(images),
+            highlight_video_url=video_url,
         )
         db.add(match)
     else:
@@ -301,6 +309,7 @@ def upsert_match_sportsdb(db: Session, event_json: dict) -> Match:
         match.home_score = _int_or_none(event_json.get("intHomeScore"))
         match.away_score = _int_or_none(event_json.get("intAwayScore"))
         match.highlight_image_urls = ",".join(images)
+        match.highlight_video_url = video_url or match.highlight_video_url
     return match
 
 

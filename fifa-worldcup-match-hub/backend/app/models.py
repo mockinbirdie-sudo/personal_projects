@@ -28,6 +28,7 @@ class Match(Base):
     venue: Mapped[str] = mapped_column(String, default="")
     stage: Mapped[str] = mapped_column(String, default="")  # e.g. "Group Stage", "Final"
     highlight_image_urls: Mapped[str] = mapped_column(String, default="")  # comma-separated URLs
+    highlight_video_url: Mapped[str | None] = mapped_column(String, nullable=True)  # YouTube link, when curated
 
     home_team: Mapped["Team"] = relationship(foreign_keys=[home_team_id])
     away_team: Mapped["Team"] = relationship(foreign_keys=[away_team_id])

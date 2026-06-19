@@ -23,6 +23,7 @@ class MatchSummaryOut(BaseModel):
     venue: str
     stage: str
     highlight_images: list[str]
+    highlight_video_url: str | None
     key_events: list[str]
 
 
