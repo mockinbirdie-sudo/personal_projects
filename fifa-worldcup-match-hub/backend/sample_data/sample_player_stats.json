@@ -1,0 +1,44 @@
+[
+  {
+    "team": {"id": 26, "name": "Argentina"},
+    "players": [
+      {
+        "player": {"id": 154, "name": "L. Messi", "photo": "https://media.api-sports.io/football/players/154.png"},
+        "statistics": [
+          {
+            "games": {"minutes": 120, "position": "Attacker", "rating": "8.5"},
+            "goals": {"total": 2, "assists": 1},
+            "shots": {"total": 6, "on": 4},
+            "passes": {"total": 60, "accuracy": "88"},
+            "tackles": {"total": 1},
+            "duels": {"won": 5},
+            "dribbles": {"success": 3},
+            "fouls": {"committed": 1},
+            "cards": {"yellow": 0, "red": 0}
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "team": {"id": 24, "name": "France"},
+    "players": [
+      {
+        "player": {"id": 278, "name": "K. Mbappe", "photo": "https://media.api-sports.io/football/players/278.png"},
+        "statistics": [
+          {
+            "games": {"minutes": 120, "position": "Attacker", "rating": "9.0"},
+            "goals": {"total": 3, "assists": 0},
+            "shots": {"total": 7, "on": 5},
+            "passes": {"total": 40, "accuracy": "82"},
+            "tackles": {"total": 0},
+            "duels": {"won": 4},
+            "dribbles": {"success": 2},
+            "fouls": {"committed": 0},
+            "cards": {"yellow": 0, "red": 0}
+          }
+        ]
+      }
+    ]
+  }
+]

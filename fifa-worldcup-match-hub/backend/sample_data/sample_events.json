@@ -1,0 +1,29 @@
+[
+  {
+    "time": {"elapsed": 23, "extra": null},
+    "team": {"id": 26, "name": "Argentina"},
+    "player": {"id": 154, "name": "L. Messi"},
+    "assist": {"id": null, "name": null},
+    "type": "Goal",
+    "detail": "Penalty",
+    "comments": null
+  },
+  {
+    "time": {"elapsed": 36, "extra": null},
+    "team": {"id": 26, "name": "Argentina"},
+    "player": {"id": 277, "name": "A. Di Maria"},
+    "assist": {"id": 154, "name": "L. Messi"},
+    "type": "Goal",
+    "detail": "Normal Goal",
+    "comments": null
+  },
+  {
+    "time": {"elapsed": 80, "extra": null},
+    "team": {"id": 24, "name": "France"},
+    "player": {"id": 278, "name": "K. Mbappe"},
+    "assist": {"id": null, "name": null},
+    "type": "Goal",
+    "detail": "Penalty",
+    "comments": null
+  }
+]

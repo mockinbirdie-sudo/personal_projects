@@ -1,0 +1,14 @@
+{
+  "fixture": {
+    "id": 999001,
+    "date": "2022-12-18T15:00:00+00:00",
+    "status": {"short": "FT"},
+    "venue": {"name": "Lusail Stadium"}
+  },
+  "league": {"round": "Final"},
+  "teams": {
+    "home": {"id": 26, "name": "Argentina", "logo": "https://media.api-sports.io/football/teams/26.png"},
+    "away": {"id": 24, "name": "France", "logo": "https://media.api-sports.io/football/teams/24.png"}
+  },
+  "goals": {"home": 3, "away": 3}
+}
