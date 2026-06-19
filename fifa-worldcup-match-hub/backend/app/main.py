@@ -1,6 +1,9 @@
+import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, HTTPException
+
+logging.basicConfig(level=logging.INFO)
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -42,9 +45,12 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
-    from ingestion.fetch_matches import start_scheduler
+    try:
+        from ingestion.fetch_matches import start_scheduler
 
-    start_scheduler()
+        start_scheduler()
+    except Exception:
+        logging.getLogger(__name__).exception("Failed to start ingestion scheduler")
 
 
 def _key_events_for(match: Match) -> list[str]:
