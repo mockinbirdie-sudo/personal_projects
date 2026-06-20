@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     # Without it, sentiment falls back to Google News RSS headlines only (no key needed there).
     youtube_api_key: str = ""
 
+    # Optional: Google Custom Search (reuses youtube_api_key as the API key — same Google Cloud
+    # project, just needs the Custom Search API enabled on it too) for real match photos from a
+    # curated list of football/news domains, supplementing TheSportsDB's images. Skipped entirely
+    # when search_engine_id is unset.
+    search_engine_id: str = ""
+
     database_url: str = "sqlite:///./worldcup.db"
     admin_reset_token: str = ""
     wc_league_id: int = 1

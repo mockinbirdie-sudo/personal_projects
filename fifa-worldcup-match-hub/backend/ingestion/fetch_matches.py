@@ -24,6 +24,7 @@ from ingestion.normalize import (
     upsert_match_sportsdb,
     upsert_match_stats_sportsdb,
 )
+from ingestion.image_search import search_match_images
 from ingestion.sentiment import compute_match_sentiment
 from ingestion.sportsdb_client import TheSportsDbClient
 
@@ -64,6 +65,21 @@ def run_ingestion() -> int:
                     "Skipping fixture %s — basic upsert failed", event_json.get("idEvent"), exc_info=True
                 )
                 continue
+
+            if not match.custom_images_fetched:
+                try:
+                    query = f"{match.home_team.name} vs {match.away_team.name} FIFA World Cup 2026"
+                    urls = search_match_images(query)
+                    if urls:
+                        existing = [u for u in match.highlight_image_urls.split(",") if u]
+                        # Real match photos first, then existing (e.g. logo) fallbacks, deduped.
+                        combined = list(dict.fromkeys(urls + existing))
+                        match.highlight_image_urls = ",".join(combined[:8])
+                    match.custom_images_fetched = True
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                    logger.warning("Custom image search failed for match %s", match.id, exc_info=True)
 
             if match.status not in ("NS", "TBD", ""):
                 try:

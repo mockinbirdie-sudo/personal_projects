@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -29,6 +29,7 @@ class Match(Base):
     stage: Mapped[str] = mapped_column(String, default="")  # e.g. "Group Stage", "Final"
     highlight_image_urls: Mapped[str] = mapped_column(String, default="")  # comma-separated URLs
     highlight_video_url: Mapped[str | None] = mapped_column(String, nullable=True)  # YouTube link, when curated
+    custom_images_fetched: Mapped[bool] = mapped_column(Boolean, default=False)  # Custom Search queried once?
 
     home_team: Mapped["Team"] = relationship(foreign_keys=[home_team_id])
     away_team: Mapped["Team"] = relationship(foreign_keys=[away_team_id])
