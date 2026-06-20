@@ -252,3 +252,14 @@ def schema_check(token: str):
         if missing:
             report[table_name] = {"missing_columns": missing}
     return {"in_sync": not report, "details": report}
+
+
+@app.get("/admin/test-image-search")
+def test_image_search(token: str, q: str = "Mexico vs South Korea FIFA World Cup 2026"):
+    """Diagnostic: calls the Custom Search image lookup directly (bypassing the once-per-match
+    cache) so failures can be investigated without waiting for a full ingestion cycle."""
+    if not settings.admin_reset_token or token != settings.admin_reset_token:
+        raise HTTPException(status_code=404)
+    from ingestion.image_search import search_match_images
+
+    return {"query": q, "results": search_match_images(q)}

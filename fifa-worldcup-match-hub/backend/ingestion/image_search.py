@@ -33,7 +33,12 @@ def search_match_images(query: str, max_results: int = 5) -> list[str]:
                     "safe": "active",
                 },
             )
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                logger.warning(
+                    "Custom Search image fetch failed for query %r: %s %s",
+                    query, resp.status_code, resp.text[:500],
+                )
+                return []
             data = resp.json()
     except httpx.HTTPError:
         logger.warning("Custom Search image fetch failed for query %r", query, exc_info=True)
