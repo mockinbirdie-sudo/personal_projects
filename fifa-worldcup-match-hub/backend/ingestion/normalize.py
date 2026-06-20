@@ -427,16 +427,95 @@ def upsert_lineup_sportsdb(db: Session, match: Match, lineup_json: list[dict]) -
     db.flush()  # make lineup inserts visible to upsert_events_sportsdb's db.get() checks
 
 
+_AF_PLAYER_ID_OFFSET = 900_000_000  # keeps API-Football-only synthetic player ids out of
+# TheSportsDB's real id range (observed in the tens-to-hundreds of millions, well under this).
+
+
+def _resolve_af_team_id(match: Match, af_team_name: str) -> int | None:
+    """API-Football and TheSportsDB use different team ids for the same fixture, but both
+    label events/stats with the team's name — match on that instead of trying to map ids."""
+    name = (af_team_name or "").strip().lower()
+    if name == (match.home_team.name or "").strip().lower():
+        return match.home_team_id
+    if name == (match.away_team.name or "").strip().lower():
+        return match.away_team_id
+    return None
+
+
+def _resolve_or_create_af_player(db: Session, team_id: int, match_id: int, af_player_id, af_player_name: str) -> int | None:
+    """Finds the existing (TheSportsDB-sourced) player by name within the team, or creates a
+    synthetic-id stub for a player API-Football knows about that TheSportsDB's capped lineup
+    never surfaced. Always ensures a PlayerMatchStat row exists so stats can attach to it."""
+    name = (af_player_name or "").strip()
+    if not name or af_player_id is None:
+        return None
+    existing = (
+        db.query(Player)
+        .filter(Player.team_id == team_id, func.lower(Player.name) == name.lower())
+        .one_or_none()
+    )
+    if existing is not None:
+        player_id = existing.id
+    else:
+        player_id = _AF_PLAYER_ID_OFFSET + int(af_player_id)
+        if db.get(Player, player_id) is None:
+            db.add(Player(id=player_id, name=name, team_id=team_id, position="", photo_url=""))
+            db.flush()
+    if db.query(PlayerMatchStat).filter_by(player_id=player_id, match_id=match_id).one_or_none() is None:
+        db.add(PlayerMatchStat(player_id=player_id, match_id=match_id, team_id=team_id))
+        db.flush()
+    return player_id
+
+
+def _replace_events_with_api_football(db: Session, match: Match, af_client) -> None:
+    """Replaces TheSportsDB's (free-tier-capped, max 5) events with API-Football's complete
+    list, when available. No-ops (leaving TheSportsDB's events untouched) if API-Football
+    returns nothing — e.g. still suspended.
+    """
+    events_json = af_client.get_fixture_events(match.api_football_id)
+    if not events_json:
+        return
+
+    db.query(MatchEvent).filter(MatchEvent.match_id == match.id).delete()
+    db.flush()
+
+    for ev in events_json:
+        team_id = _resolve_af_team_id(match, (ev.get("team") or {}).get("name", ""))
+        if team_id is None:
+            continue
+        player = ev.get("player") or {}
+        assist = ev.get("assist") or {}
+        player_id = _resolve_or_create_af_player(db, team_id, match.id, player.get("id"), player.get("name"))
+        assist_id = _resolve_or_create_af_player(db, team_id, match.id, assist.get("id"), assist.get("name"))
+
+        db.add(
+            MatchEvent(
+                match_id=match.id,
+                minute=ev["time"]["elapsed"],
+                extra_minute=ev["time"].get("extra"),
+                type=ev["type"],
+                detail=ev.get("detail", ""),
+                team_id=team_id,
+                player_id=player_id,
+                assist_player_id=assist_id,
+                description=ev.get("comments") or "",
+            )
+        )
+
+
 def enhance_with_api_football(db: Session, match: Match, af_client) -> None:
-    """Best-effort enhancement: fills in richer match/player stats from API-Football when the
-    fixture has a known cross-reference id and the API-Football key is working. Silently skips
-    (raising back to the caller, which should catch+rollback) if the source is unavailable —
-    TheSportsDB data already committed for this match must never depend on this succeeding.
+    """Best-effort enhancement: when the fixture has a known cross-reference id and the
+    API-Football key is working, this replaces TheSportsDB's free-tier-capped events/lineup
+    with API-Football's complete versions and fills in richer per-player stats. Silently no-ops
+    per section if a given API-Football call fails — TheSportsDB data already committed for
+    this match must never depend on any of this succeeding.
     """
     if not match.api_football_id:
         return
 
     team_ids = [match.home_team_id, match.away_team_id]
+
+    _replace_events_with_api_football(db, match, af_client)
 
     stats = af_client.get_fixture_statistics(match.api_football_id)
     if len(stats) == 2:
@@ -456,12 +535,13 @@ def enhance_with_api_football(db: Session, match: Match, af_client) -> None:
     player_stats = af_client.get_fixture_player_stats(match.api_football_id)
     if len(player_stats) == 2:
         for team_id, team_block in zip(team_ids, player_stats):
-            roster = {p.name.strip().lower(): p for p in db.query(Player).filter_by(team_id=team_id).all()}
             for entry in team_block.get("players", []):
-                player = roster.get(entry["player"]["name"].strip().lower())
-                if player is None:
+                player_id = _resolve_or_create_af_player(
+                    db, team_id, match.id, entry["player"].get("id"), entry["player"].get("name")
+                )
+                if player_id is None:
                     continue
-                pms = db.query(PlayerMatchStat).filter_by(player_id=player.id, match_id=match.id).one_or_none()
+                pms = db.query(PlayerMatchStat).filter_by(player_id=player_id, match_id=match.id).one_or_none()
                 if pms is None:
                     continue
                 s = (entry.get("statistics") or [{}])[0]
