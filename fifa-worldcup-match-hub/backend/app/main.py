@@ -229,3 +229,26 @@ def reset_db(token: str):
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     return {"status": "reset"}
+
+
+@app.get("/admin/schema-check")
+def schema_check(token: str):
+    """Diagnostic: compares the live DB's actual columns against what the currently-running
+    code's models expect, so schema-drift issues can be confirmed directly instead of inferred
+    from ingestion failures.
+    """
+    if not settings.admin_reset_token or token != settings.admin_reset_token:
+        raise HTTPException(status_code=404)
+    from sqlalchemy import inspect
+
+    from app.db import Base, engine
+
+    inspector = inspect(engine)
+    report = {}
+    for table_name, table in Base.metadata.tables.items():
+        expected = {c.name for c in table.columns}
+        actual = {c["name"] for c in inspector.get_columns(table_name)} if inspector.has_table(table_name) else set()
+        missing = sorted(expected - actual)
+        if missing:
+            report[table_name] = {"missing_columns": missing}
+    return {"in_sync": not report, "details": report}
