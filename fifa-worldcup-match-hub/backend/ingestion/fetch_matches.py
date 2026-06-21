@@ -9,6 +9,7 @@ Run on a timer:  see start_scheduler() below, called from app.main on FastAPI st
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -30,6 +31,11 @@ from ingestion.sportsdb_client import TheSportsDbClient
 
 logger = logging.getLogger(__name__)
 
+# Held for the duration of a run_ingestion() call. Destructive admin operations (schema reset)
+# must acquire this first, so they never run concurrently with a live ingestion transaction —
+# that race previously caused "relation does not exist" errors mid-run.
+ingestion_lock = threading.Lock()
+
 
 def _dates_in_recent_window() -> list[str]:
     now = datetime.now(timezone.utc)
@@ -45,6 +51,10 @@ def run_ingestion() -> int:
     TheSportsDB, then optionally enhances with API-Football stats. Returns the number of
     fixtures processed.
     """
+    if not ingestion_lock.acquire(blocking=False):
+        logger.warning("Ingestion already running — skipping this cycle")
+        return 0
+
     sportsdb = TheSportsDbClient()
     af_client = ApiFootballClient() if settings.api_football_key else None
 
@@ -132,6 +142,7 @@ def run_ingestion() -> int:
         raise
     finally:
         db.close()
+        ingestion_lock.release()
     return processed
 
 

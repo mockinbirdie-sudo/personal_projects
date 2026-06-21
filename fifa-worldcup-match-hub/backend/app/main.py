@@ -48,9 +48,10 @@ def on_startup() -> None:
     try:
         from ingestion.fetch_matches import start_scheduler
 
-        start_scheduler()
+        app.state.scheduler = start_scheduler()
     except Exception:
         logging.getLogger(__name__).exception("Failed to start ingestion scheduler")
+        app.state.scheduler = None
 
 
 def _key_events_for(match: Match) -> list[str]:
@@ -226,10 +227,19 @@ def reset_db(token: str):
         raise HTTPException(status_code=404)
     from app import models  # noqa: F401  ensure every model is registered before touching metadata
     from app.db import Base, engine
+    from ingestion.fetch_matches import ingestion_lock
 
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    table_names = sorted(Base.metadata.tables.keys())
+    # A scheduled ingestion run could be mid-transaction against these tables right now — drop_all
+    # while that's happening corrupts the live run ("relation does not exist" mid-query). Wait for
+    # it to finish (or time out) rather than risk that race.
+    if not ingestion_lock.acquire(timeout=60):
+        raise HTTPException(status_code=503, detail="Ingestion is currently running; try again shortly")
+    try:
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        table_names = sorted(Base.metadata.tables.keys())
+    finally:
+        ingestion_lock.release()
     return {"status": "reset", "tables": table_names}
 
 
