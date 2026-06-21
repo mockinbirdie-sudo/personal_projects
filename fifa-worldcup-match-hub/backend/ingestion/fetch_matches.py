@@ -31,16 +31,19 @@ from ingestion.sportsdb_client import TheSportsDbClient
 logger = logging.getLogger(__name__)
 
 
-def _dates_in_last_24h() -> list[str]:
+def _dates_in_recent_window() -> list[str]:
     now = datetime.now(timezone.utc)
-    yesterday = now - timedelta(hours=24)
-    dates = {yesterday.date().isoformat(), now.date().isoformat()}
+    dates = {
+        (now - timedelta(days=offset)).date().isoformat()
+        for offset in range(settings.recent_window_days + 1)
+    }
     return sorted(dates)
 
 
 def run_ingestion() -> int:
-    """Ingests World Cup fixtures within the last 24h from TheSportsDB, then optionally
-    enhances with API-Football stats. Returns the number of fixtures processed.
+    """Ingests World Cup fixtures within the recent window (settings.recent_window_days) from
+    TheSportsDB, then optionally enhances with API-Football stats. Returns the number of
+    fixtures processed.
     """
     sportsdb = TheSportsDbClient()
     af_client = ApiFootballClient() if settings.api_football_key else None
@@ -49,7 +52,7 @@ def run_ingestion() -> int:
     processed = 0
     try:
         events: list[dict] = []
-        for date in _dates_in_last_24h():
+        for date in _dates_in_recent_window():
             try:
                 events.extend(sportsdb.get_events_for_date(date))
             except Exception:
@@ -116,8 +119,12 @@ def run_ingestion() -> int:
 
             processed += 1
 
-        recompute_tournament_stats(db)
-        db.commit()
+        try:
+            recompute_tournament_stats(db)
+            db.commit()
+        except Exception:
+            db.rollback()
+            logger.warning("Tournament stats recompute failed — per-match data above is still committed", exc_info=True)
         logger.info("Ingestion complete: %d fixtures processed", processed)
     except Exception:
         db.rollback()

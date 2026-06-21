@@ -83,7 +83,7 @@ def _to_match_summary(match: Match) -> MatchSummaryOut:
 
 @app.get("/matches/recent", response_model=list[MatchSummaryOut])
 def get_recent_matches(db: Session = Depends(get_db)):
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.recent_window_days)
     matches = (
         db.query(Match)
         .filter(Match.kickoff_utc >= cutoff)
@@ -224,11 +224,13 @@ def reset_db(token: str):
     """
     if not settings.admin_reset_token or token != settings.admin_reset_token:
         raise HTTPException(status_code=404)
+    from app import models  # noqa: F401  ensure every model is registered before touching metadata
     from app.db import Base, engine
 
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    return {"status": "reset"}
+    table_names = sorted(Base.metadata.tables.keys())
+    return {"status": "reset", "tables": table_names}
 
 
 @app.get("/admin/schema-check")
@@ -241,6 +243,7 @@ def schema_check(token: str):
         raise HTTPException(status_code=404)
     from sqlalchemy import inspect
 
+    from app import models  # noqa: F401  ensure every model is registered before touching metadata
     from app.db import Base, engine
 
     inspector = inspect(engine)
@@ -249,7 +252,9 @@ def schema_check(token: str):
         expected = {c.name for c in table.columns}
         actual = {c["name"] for c in inspector.get_columns(table_name)} if inspector.has_table(table_name) else set()
         missing = sorted(expected - actual)
-        if missing:
+        if not inspector.has_table(table_name):
+            report[table_name] = {"missing_table": True}
+        elif missing:
             report[table_name] = {"missing_columns": missing}
     return {"in_sync": not report, "details": report}
 
