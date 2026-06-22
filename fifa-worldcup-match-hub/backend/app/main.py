@@ -278,3 +278,21 @@ def test_image_search(token: str, q: str = "Mexico vs South Korea FIFA World Cup
     from ingestion.image_search import search_match_images
 
     return {"query": q, "results": search_match_images(q)}
+
+
+@app.get("/admin/test-api-football")
+def test_api_football(token: str, fixture_id: int = 1489388):
+    """Diagnostic: calls API-Football directly to confirm whether the key is currently
+    working or suspended/rate-limited, without waiting for a full ingestion cycle."""
+    if not settings.admin_reset_token or token != settings.admin_reset_token:
+        raise HTTPException(status_code=404)
+    if not settings.api_football_key:
+        return {"configured": False}
+    from ingestion.api_football_client import ApiFootballClient, ApiFootballError
+
+    client = ApiFootballClient()
+    try:
+        events = client.get_fixture_events(fixture_id)
+        return {"configured": True, "working": True, "sample_event_count": len(events)}
+    except ApiFootballError as e:
+        return {"configured": True, "working": False, "error": str(e)}
